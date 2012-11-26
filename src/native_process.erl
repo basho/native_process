@@ -12,6 +12,8 @@
                 native_busy,
                 mailbox}).
 
+-include_lib("eunit/include/eunit.hrl").
+
 start_link(Mod) ->
     gen_server:start_link(?MODULE, Mod, []).
 
@@ -19,6 +21,7 @@ start(Mod) ->
     gen_server:start(?MODULE, Mod, []).
 
 init(Mod) ->
+    %% schedule_tick(),
     Native = Mod:spawn_native(),
     {ok, #state{mod=Mod,
                 native=Native,
@@ -37,6 +40,10 @@ handle_cast(Msg, State) ->
     State3 = maybe_sendmail(State2),
     {noreply, State3}.
 
+handle_info(tick, State) ->
+    ?debugFmt("~p~n", [State]),
+    schedule_tick(),
+    {noreply, State};
 handle_info(sendmail, State) ->
     State2 = State#state{native_busy=false},
     State3 = maybe_sendmail(State2),
@@ -64,6 +71,7 @@ maybe_sendmail(State=#state{mod=Mod, native=NP, native_busy=Busy, mailbox=Mail})
                 ok ->
                     State#state{native_busy=true, mailbox=[]};
                 _ ->
+                    self() ! sendmail,
                     State
             end
     end.
@@ -83,3 +91,7 @@ find_nif(Mod) ->
                      filename:join(Dir, Name)
              end,
     SoName.
+
+schedule_tick() ->
+    erlang:send_after(5000, self(), tick).
+
